@@ -1,11 +1,46 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<mule xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core"
-	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
-	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
-http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd">
+<mule xmlns:scripting="http://www.mulesoft.org/schema/mule/scripting" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:email="http://www.mulesoft.org/schema/mule/email"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/email http://www.mulesoft.org/schema/mule/email/current/mule-email.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/scripting http://www.mulesoft.org/schema/mule/scripting/current/mule-scripting.xsd">
 	<flow name="email-sapiFlow" doc:id="33fa236a-05d1-4b81-98cd-8fef95782948" >
-		<http:listener doc:name="Listener" doc:id="e635c3d2-2df3-450c-beb4-7804a4e66032" config-ref="HTTP_Listener_config" path="/email"/>
-		<logger level="INFO" doc:name="Logger" doc:id="f02ee5fc-7088-4d91-9c39-e53ce143e5ab" message="START"/>
+		<http:listener doc:name="Listener" doc:id="e635c3d2-2df3-450c-beb4-7804a4e66032" config-ref="HTTP_Listener_config" path="/email" allowedMethods="POST"/>
+		<logger level="INFO" doc:name="Start" doc:id="f02ee5fc-7088-4d91-9c39-e53ce143e5ab" message="Sending the email"/>
+		<set-payload value="#[%dw 2.0&#10;output application/dw&#10;---&#10;payload]" doc:name="multi-part-form-data to text" doc:id="cbffbeaa-3be9-4218-9c27-c8ff9ae8a5cd" />
+		<choice doc:name="Choice" doc:id="ffdb488a-219c-4a0a-8123-2ece33efd74a">
+			<when expression="#[!isEmpty(payload.parts.attachment.content)]">
+				<set-variable value='#[output application/java&#10;&#10;var content = payload.parts.attachment.content&#10;var filename = payload.parts.attachment.headers."Content-Disposition".filename&#10;---&#10;{&#10;	"filename": filename, &#10;	"content": content&#10;}]' doc:name="Set Variable" doc:id="a219e709-05fa-4f6d-861c-b4a2d1f542c8" variableName="file" />
+			</when>
+			<otherwise>
+				<logger level="INFO" doc:name="No Attachment" doc:id="40fd97d4-9690-4ce5-b72f-b0080bb81cc6" message="No Attachment" />
+				<set-variable value="" doc:name="Set Variable" doc:id="2f7e17af-0fc2-4987-82ae-d6d500d4d079" variableName="file" />
+			</otherwise>
+		</choice>
+		<set-payload value="#[%dw 2.0&#10;output application/json&#10;---&#10;payload.parts]" doc:name="multi-part-form-data to JSON" doc:id="0d4fcb47-2470-4093-9f94-d626e36143d8" />
+		<email:send doc:name="Send" doc:id="12e5b713-e4c5-49d9-9d0e-1978b107cdf4" config-ref="Email_SMTP" fromAddress="#[payload.from.content]" subject='#[payload.subject.content default ""]' toAddresses='#[payload.to.content splitBy ";" default []]'>
+			<email:body>
+				<email:content><![CDATA[#[payload.body.content default ""]]]></email:content>
+			</email:body>
+			<email:attachments ><![CDATA[#[if(!isEmpty(vars.file)){
+	(vars.file[0]): vars.file[1]
+}else{
+	
+}]]]></email:attachments>
+		</email:send>
+		<ee:transform doc:name="Transform Message" doc:id="b2b66fa5-9821-41f4-b938-4c670d3083f2" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"message": "Email from " ++ payload.from.content ++" was sent to " ++ payload.to.content
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<logger level="INFO" doc:name="End" doc:id="1872e2f6-d2b9-40f2-ae82-e2378033e51a" message="Email sent" />
 	</flow>
 </mule>

@@ -1,5 +1,2 @@
 email: 
   password: "${secure::email.password}"
-
-file: 
-  path: "${mule.home}/apps/${app.name}"
